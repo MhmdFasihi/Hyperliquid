@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hyper-cli"
+version = "0.1.0"
+description = "CLI for spot trading on Hyperliquid DEX"
+requires-python = ">=3.10"
+dependencies = [
+    "hyperliquid-python-sdk>=0.4.0",
+    "typer[all]>=0.9.0",
+    "rich>=13.0.0",
+]
+
+[project.scripts]
+hyper = "hyper_cli.main:app"
+
+[tool.setuptools.packages.find]
+include = ["hyper_cli*"]

@@ -1,0 +1,13 @@
+config.json
+*.key
+*.secret
+.env
+.env.*
+
+__pycache__/
+*.pyc
+*.egg-info/
+dist/
+build/
+.eggs/
+.DS_Store
