@@ -21,12 +21,6 @@ INTERVAL_MS = {
     "1M": 30 * 24 * 60 * 60 * 1000,
 }
 
-MARKET_ALIASES = {
-    "WTI": ("BRENTOIL",),
-    "WTIOIL": ("BRENTOIL",),
-}
-
-
 def now_ms() -> int:
     return int(time.time() * 1000)
 
@@ -85,7 +79,6 @@ def find_mid(mids: dict, aliases: dict, coin: str, dex: str | None = None) -> tu
 
 def _market_candidates(raw: str, normalized_dex: str) -> list[str]:
     base_names = [raw, raw.upper()]
-    base_names.extend(MARKET_ALIASES.get(raw.upper(), ()))
 
     candidates: list[str] = []
     for name in base_names:

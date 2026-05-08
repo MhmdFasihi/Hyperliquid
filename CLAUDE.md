@@ -31,7 +31,6 @@ hyper_cli/
 - **Lazy Initialization**: `HyperClient.exchange` and `.info` are only created when first accessed.
 - **Public Info Client**: `get_info()` creates a read-only `Info` client for market data commands that do not need `config.json`; market/feed/perp commands accept `--dex` where the SDK supports builder-deployed perp DEXs.
 - **Per-DEX Clients**: Use `HyperClient.info_for_dex(dex)` and `HyperClient.exchange_for_dex(dex)` for non-default perp DEX commands. Normalize builder symbols with `market.normalize_coin(info, coin, dex)`.
-- **Market Aliases**: Common oil aliases `WTI` and `WTIOIL` resolve to `BRENTOIL` when the DEX exposes Brent oil instead of a WTI symbol.
 - **Network Selection**: authenticated commands use `network` from `config.json` (`mainnet` or `testnet`). Public market/feed commands use `HYPERLIQUID_NETWORK` and default to mainnet.
 - **WebSocket Feeds**: `get_ws_info()` loads market metadata first, then starts a WebSocket manager for `hyper feed ...`; this avoids orphaned WebSocket threads when metadata/network initialization fails.
 - **Sub-apps**: `hyper spot ...` and `hyper perp ...` are separate Typer apps registered on the root app.
