@@ -136,6 +136,7 @@ hyper price GOLD --dex xyz
 hyper prices
 hyper book GOLD --dex xyz --depth 10
 hyper book BRENTOIL --dex xyz --depth 10
+hyper book WTIOIL --dex xyz --depth 10    # resolves to BRENTOIL when WTIOIL is unavailable
 hyper candles ETH 1h --limit 24
 hyper funding ETH --hours 24
 HYPERLIQUID_NETWORK=testnet hyper price ETH

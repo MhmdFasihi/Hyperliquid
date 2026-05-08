@@ -21,6 +21,11 @@ INTERVAL_MS = {
     "1M": 30 * 24 * 60 * 60 * 1000,
 }
 
+MARKET_ALIASES = {
+    "WTI": ("BRENTOIL",),
+    "WTIOIL": ("BRENTOIL",),
+}
+
 
 def now_ms() -> int:
     return int(time.time() * 1000)
@@ -39,9 +44,7 @@ def normalize_coin(info: Any, coin: str, dex: str | None = None) -> str:
     """Return the SDK-recognized market name while accepting common casing."""
     raw = coin.strip()
     normalized_dex = normalize_dex(dex)
-    candidates = [raw, raw.upper()]
-    if normalized_dex and ":" not in raw:
-        candidates.extend([f"{normalized_dex}:{raw}", f"{normalized_dex}:{raw.upper()}"])
+    candidates = _market_candidates(raw, normalized_dex)
     for candidate in candidates:
         if candidate in info.name_to_coin:
             return candidate
@@ -56,10 +59,8 @@ def normalize_coin(info: Any, coin: str, dex: str | None = None) -> str:
 
 def find_mid(mids: dict, aliases: dict, coin: str, dex: str | None = None) -> tuple[str, Any] | None:
     raw = coin.strip()
-    candidates = [raw, raw.upper()]
     normalized_dex = normalize_dex(dex)
-    if normalized_dex and ":" not in raw:
-        candidates.extend([f"{normalized_dex}:{raw}", f"{normalized_dex}:{raw.upper()}"])
+    candidates = _market_candidates(raw, normalized_dex)
 
     for candidate in list(candidates):
         alias = aliases.get(candidate)
@@ -80,6 +81,18 @@ def find_mid(mids: dict, aliases: dict, coin: str, dex: str | None = None) -> tu
             return candidate, mids[candidate]
 
     return None
+
+
+def _market_candidates(raw: str, normalized_dex: str) -> list[str]:
+    base_names = [raw, raw.upper()]
+    base_names.extend(MARKET_ALIASES.get(raw.upper(), ()))
+
+    candidates: list[str] = []
+    for name in base_names:
+        candidates.append(name)
+        if normalized_dex and ":" not in name:
+            candidates.append(f"{normalized_dex}:{name}")
+    return candidates
 
 
 def current_funding_ctx(info: Any, coin: str) -> dict | None:

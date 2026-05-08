@@ -66,6 +66,7 @@ hyper book ETH --depth 20
 hyper book ETH --dex builder-dex
 hyper book GOLD --dex xyz
 hyper book BRENTOIL --dex xyz
+hyper book WTIOIL --dex xyz
 ```
 
 **Options:**
@@ -105,6 +106,7 @@ hyper funding GOLD --dex xyz
 - `--dex` — Perp DEX name for builder-deployed markets
 
 For builder-deployed markets, pass the DEX name in lowercase or uppercase with `--dex`; commands normalize it before constructing SDK clients and symbols.
+Common oil aliases `WTI` and `WTIOIL` resolve to `BRENTOIL` when that is the available builder-market symbol.
 
 ---
 

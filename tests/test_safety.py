@@ -67,7 +67,7 @@ class FakeExchange:
 
 
 class FakeInfo:
-    name_to_coin = {"xyz:GOLD": "xyz:GOLD"}
+    name_to_coin = {"xyz:GOLD": "xyz:GOLD", "xyz:BRENTOIL": "xyz:BRENTOIL"}
 
     def __init__(self):
         self.open_orders_response = [{"coin": "ETH", "oid": 123}]
@@ -321,6 +321,12 @@ class SafetyTests(unittest.TestCase):
         fake_info = FakeInfo()
         self.assertEqual(normalize_coin(fake_info, "GOLD", "XYZ"), "xyz:GOLD")
         self.assertEqual(find_mid({"xyz:GOLD": "3000"}, fake_info.name_to_coin, "GOLD", "XYZ"), ("xyz:GOLD", "3000"))
+
+    def test_oil_alias_resolves_to_available_builder_market(self):
+        fake_info = FakeInfo()
+        mids = {"xyz:BRENTOIL": "80"}
+        self.assertEqual(normalize_coin(fake_info, "WTIOIL", "XYZ"), "xyz:BRENTOIL")
+        self.assertEqual(find_mid(mids, fake_info.name_to_coin, "WTIOIL", "XYZ"), ("xyz:BRENTOIL", "80"))
 
     def test_order_response_accepts_none(self):
         self.assertFalse(print_order_response(None).ok)
