@@ -1,14 +1,21 @@
 """Load and validate config.json credentials."""
 
 import json
+import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
+from hyperliquid.utils import constants
+
 from hyper_cli.validation import derive_address, is_valid_address, is_valid_private_key
 
 CONFIG_FILENAME = "config.json"
+NETWORKS = {
+    "mainnet": constants.MAINNET_API_URL,
+    "testnet": constants.TESTNET_API_URL,
+}
 
 
 @dataclass(frozen=True)
@@ -16,6 +23,8 @@ class Config:
     secret_key: str
     account_address: str
     main_wallet_secret_key: Optional[str] = None
+    network: str = "mainnet"
+    api_url: str = constants.MAINNET_API_URL
 
 
 def load_config() -> Config:
@@ -53,6 +62,7 @@ def load_config() -> Config:
     secret_key = raw.get("agent_secret_key") or raw.get("secret_key")
     account_address = raw.get("account_address")
     main_wallet_secret_key = raw.get("main_wallet_secret_key")
+    network = _normalize_network(raw.get("network") or os.environ.get("HYPERLIQUID_NETWORK") or "mainnet")
 
     missing = []
     if not secret_key:
@@ -82,7 +92,15 @@ def load_config() -> Config:
         secret_key=secret_key,
         account_address=account_address,
         main_wallet_secret_key=main_wallet_secret_key,
+        network=network,
+        api_url=NETWORKS[network],
     )
+
+
+def public_api_url() -> str:
+    """Resolve the API URL for unauthenticated public commands."""
+    network = _normalize_network(os.environ.get("HYPERLIQUID_NETWORK") or "mainnet")
+    return NETWORKS[network]
 
 
 def _validate_private_key(value: str, name: str) -> None:
@@ -95,3 +113,12 @@ def _validate_address(value: str, name: str) -> None:
     if not is_valid_address(value):
         print(f"Error: config.json field {name} must be a 0x-prefixed 20-byte address.", file=sys.stderr)
         raise SystemExit(1)
+
+
+def _normalize_network(value: str) -> str:
+    network = str(value).strip().lower()
+    if network not in NETWORKS:
+        allowed = ", ".join(sorted(NETWORKS))
+        print(f"Error: network must be one of: {allowed}.", file=sys.stderr)
+        raise SystemExit(1)
+    return network

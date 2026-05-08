@@ -24,6 +24,13 @@ This shared command uses the default SDK order namespace. Use `hyper perp cancel
 
 ## Market Data Commands
 
+Public market and feed commands use mainnet by default. Set `HYPERLIQUID_NETWORK=testnet` to use Hyperliquid testnet for read-only checks:
+
+```bash
+HYPERLIQUID_NETWORK=testnet hyper price ETH
+HYPERLIQUID_NETWORK=testnet hyper feed prices --coins ETH --updates 1
+```
+
 ### `hyper price <COIN>`
 
 Show the current mid price for a perp coin or spot pair.

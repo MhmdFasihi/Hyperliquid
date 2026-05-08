@@ -1,11 +1,16 @@
+import os
+from pathlib import Path
+import tempfile
 import unittest
 from math import inf, nan
 
 import typer
+from hyperliquid.utils import constants
 from typer.testing import CliRunner
 
 from hyper_cli import account, client as client_module, feed, main, perp, spot
 from hyper_cli.backtest import run_backtest
+from hyper_cli.config import load_config, public_api_url
 from hyper_cli.display import format_side, format_time_ms, print_order_response
 from hyper_cli.market import find_mid, normalize_coin
 from hyper_cli.responses import parse_action_response
@@ -336,7 +341,7 @@ class SafetyTests(unittest.TestCase):
         events = []
 
         class MetadataFirstInfo:
-            def __init__(self, base_url, skip_ws=False, perp_dexs=None):
+            def __init__(self, base_url, skip_ws=False, spot_meta=None, perp_dexs=None):
                 events.append(("info", skip_ws, perp_dexs))
                 self.base_url = base_url
                 self.ws_manager = None
@@ -350,18 +355,63 @@ class SafetyTests(unittest.TestCase):
 
         original_info = client_module.Info
         original_ws_manager = client_module.WebsocketManager
+        original_load_spot_meta = client_module._load_spot_meta
         try:
             client_module.Info = MetadataFirstInfo
             client_module.WebsocketManager = StartedWsManager
+            client_module._load_spot_meta = lambda base_url: {"tokens": [], "universe": []}
             info = client_module.get_ws_info(["xyz"])
         finally:
             client_module.Info = original_info
             client_module.WebsocketManager = original_ws_manager
+            client_module._load_spot_meta = original_load_spot_meta
 
         self.assertIsInstance(info.ws_manager, StartedWsManager)
         self.assertEqual(events[0], ("info", True, ["xyz"]))
         self.assertEqual(events[1][0], "ws_init")
         self.assertEqual(events[2], ("ws_start",))
+
+    def test_spot_meta_sanitizer_removes_invalid_testnet_pairs(self):
+        spot_meta = {
+            "tokens": [{"name": "USDC"}, {"name": "PURR"}],
+            "universe": [
+                {"name": "PURR/USDC", "tokens": [1, 0]},
+                {"name": "BAD/USDC", "tokens": [2, 0]},
+            ],
+        }
+        sanitized = client_module._sanitize_spot_meta(spot_meta)
+        self.assertEqual(sanitized["universe"], [{"name": "PURR/USDC", "tokens": [1, 0]}])
+
+    def test_public_api_url_can_use_testnet_env(self):
+        old_network = os.environ.get("HYPERLIQUID_NETWORK")
+        try:
+            os.environ["HYPERLIQUID_NETWORK"] = "testnet"
+            self.assertEqual(public_api_url(), constants.TESTNET_API_URL)
+        finally:
+            if old_network is None:
+                os.environ.pop("HYPERLIQUID_NETWORK", None)
+            else:
+                os.environ["HYPERLIQUID_NETWORK"] = old_network
+
+    def test_config_network_selects_testnet(self):
+        body = """
+{
+  "agent_secret_key": "0x1111111111111111111111111111111111111111111111111111111111111111",
+  "account_address": "0x0000000000000000000000000000000000000001",
+  "network": "testnet"
+}
+""".strip()
+        old_cwd = os.getcwd()
+        with tempfile.TemporaryDirectory() as tmp:
+            Path(tmp, "config.json").write_text(body)
+            try:
+                os.chdir(tmp)
+                cfg = load_config()
+            finally:
+                os.chdir(old_cwd)
+
+        self.assertEqual(cfg.network, "testnet")
+        self.assertEqual(cfg.api_url, constants.TESTNET_API_URL)
 
     def test_wait_for_stream_disconnects_and_propagates_callback_error(self):
         fake = FakeWsInfo()

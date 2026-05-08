@@ -79,13 +79,15 @@ Edit `config.json` with your API agent credentials:
 {
     "agent_secret_key": "0xYOUR_AGENT_PRIVATE_KEY",
     "account_address": "0xYOUR_MAIN_WALLET_ADDRESS",
-    "main_wallet_secret_key": ""
+    "main_wallet_secret_key": "",
+    "network": "mainnet"
 }
 ```
 
 - `agent_secret_key` — Your API agent's private key (generated at [app.hyperliquid.xyz/API](https://app.hyperliquid.xyz/API))
 - `account_address` — Your main wallet's public address
 - `main_wallet_secret_key` — Optional. Required only for user-signed account actions such as withdrawals, spot/perp transfers, and sub-account mutation.
+- `network` — `mainnet` or `testnet`. Authenticated commands use this value from `config.json`; public market/feed commands can also use `HYPERLIQUID_NETWORK=testnet`.
 
 Older configs using `secret_key` are still accepted as the agent key, but new configs should use `agent_secret_key`.
 
@@ -136,6 +138,7 @@ hyper book GOLD --dex xyz --depth 10
 hyper book BRENTOIL --dex xyz --depth 10
 hyper candles ETH 1h --limit 24
 hyper funding ETH --hours 24
+HYPERLIQUID_NETWORK=testnet hyper price ETH
 
 # Algo framework
 hyper algo strategies
