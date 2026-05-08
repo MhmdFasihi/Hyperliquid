@@ -32,12 +32,12 @@ hyper_cli/
 - **Public Info Client**: `get_info()` creates a read-only `Info` client for market data commands that do not need `config.json`; market/feed/perp commands accept `--dex` where the SDK supports builder-deployed perp DEXs.
 - **Per-DEX Clients**: Use `HyperClient.info_for_dex(dex)` and `HyperClient.exchange_for_dex(dex)` for non-default perp DEX commands. Normalize builder symbols with `market.normalize_coin(info, coin, dex)`.
 - **Mainnet Only**: Hardcoded to `constants.MAINNET_API_URL`. No testnet toggle yet.
-- **WebSocket Feeds**: `get_ws_info()` creates a WebSocket-enabled `Info` client for `hyper feed ...`.
+- **WebSocket Feeds**: `get_ws_info()` loads market metadata first, then starts a WebSocket manager for `hyper feed ...`; this avoids orphaned WebSocket threads when metadata/network initialization fails.
 - **Sub-apps**: `hyper spot ...` and `hyper perp ...` are separate Typer apps registered on the root app.
 - **Market Data**: `hyper price`, `hyper prices`, `hyper book`, `hyper candles`, and `hyper funding` are top-level read-only commands in `main.py`.
 - **Algo Framework**: `hyper algo ...` is dry-run/backtesting only. `hyper feed strategy --execute` is disabled in this release; run without `--execute` for dry-run live candle signals.
 - **Strategy Configs**: JSON is built-in. YAML uses PyYAML when installed and a simple fallback parser for the emitted template shape.
-- **Real-Time Feeds**: `hyper feed ...` uses WebSocket subscriptions. Trade rendering must tolerate unknown side codes and malformed timestamps.
+- **Real-Time Feeds**: `hyper feed ...` uses WebSocket subscriptions. DEX mid-price feeds include the normalized `dex` field in `allMids` subscriptions. Trade rendering must tolerate unknown side codes and malformed timestamps.
 - **Safety Helpers**: side parsing, finite numeric checks, address validation, Decimal USDC parsing, and confirmation prompts are centralized in `validation.py`.
 - **SDK Response Handling**: live action paths must use `print_and_require_success()` or `parse_action_response()` and exit non-zero on top-level failures, per-status errors, or unknown statuses.
 - **Confirmation Rules**: market orders, modify commands, fund-moving commands, and bulk-cancel commands prompt unless `--yes` is passed. Spot/perp market orders and modify commands also support `--dry-run`.

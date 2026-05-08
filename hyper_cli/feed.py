@@ -88,7 +88,10 @@ def prices(
 
     try:
         info = get_ws_info(perp_dexs=perp_dexs_arg(dex_name))
-        info.subscribe({"type": "allMids"}, on_msg)
+        subscription: dict[str, str] = {"type": "allMids"}
+        if dex_name:
+            subscription["dex"] = dex_name
+        info.subscribe(subscription, on_msg)
         _wait_for_stream(info, controller, seconds)
     except Exception as e:
         console.print(f"[red]Price feed failed:[/red] {e}")

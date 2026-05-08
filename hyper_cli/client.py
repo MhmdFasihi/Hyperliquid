@@ -4,6 +4,7 @@ from eth_account import Account
 from hyperliquid.exchange import Exchange
 from hyperliquid.info import Info
 from hyperliquid.utils import constants
+from hyperliquid.websocket_manager import WebsocketManager
 
 from hyper_cli.config import Config, load_config
 
@@ -88,4 +89,7 @@ def get_info(perp_dexs: list[str] | None = None) -> Info:
 
 def get_ws_info(perp_dexs: list[str] | None = None) -> Info:
     """Create a public Info client with WebSocket support enabled."""
-    return Info(constants.MAINNET_API_URL, skip_ws=False, perp_dexs=perp_dexs)
+    info = Info(constants.MAINNET_API_URL, skip_ws=True, perp_dexs=perp_dexs)
+    info.ws_manager = WebsocketManager(info.base_url)
+    info.ws_manager.start()
+    return info

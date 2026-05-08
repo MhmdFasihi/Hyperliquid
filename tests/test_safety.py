@@ -4,7 +4,7 @@ from math import inf, nan
 import typer
 from typer.testing import CliRunner
 
-from hyper_cli import account, feed, perp
+from hyper_cli import account, client as client_module, feed, main, perp, spot
 from hyper_cli.backtest import run_backtest
 from hyper_cli.display import format_side, format_time_ms, print_order_response
 from hyper_cli.market import find_mid, normalize_coin
@@ -21,6 +21,8 @@ class FakeExchange:
         self.usd_class_transfer_args = None
         self.order_args = None
         self.modify_order_args = None
+        self.cancel_args = None
+        self.bulk_cancel_args = None
         self.response = {"status": "ok"}
 
     def market_close(self, *args, **kwargs):
@@ -47,12 +49,41 @@ class FakeExchange:
         self.modify_order_args = (args, kwargs)
         return self.response
 
+    def cancel(self, *args, **kwargs):
+        self.cancel_args = (args, kwargs)
+        return self.response
+
+    def bulk_cancel(self, *args, **kwargs):
+        self.bulk_cancel_args = (args, kwargs)
+        return self.response
+
     def _slippage_price(self, name, is_buy, slippage, px=None):
         return 99.0
 
 
 class FakeInfo:
     name_to_coin = {"xyz:GOLD": "xyz:GOLD"}
+
+    def __init__(self):
+        self.open_orders_response = [{"coin": "ETH", "oid": 123}]
+
+    def open_orders(self, *args, **kwargs):
+        return self.open_orders_response
+
+
+class FakeWsInfo(FakeInfo):
+    def __init__(self):
+        super().__init__()
+        self.subscriptions = []
+        self.disconnected = False
+
+    def subscribe(self, subscription, callback):
+        self.subscriptions.append(subscription)
+        callback({"data": {"mids": {"xyz:GOLD": "3000", "ETH": "2000"}}})
+        return len(self.subscriptions)
+
+    def disconnect_websocket(self):
+        self.disconnected = True
 
 
 class FakeClient:
@@ -288,6 +319,118 @@ class SafetyTests(unittest.TestCase):
 
     def test_order_response_accepts_none(self):
         self.assertFalse(print_order_response(None).ok)
+
+    def test_feed_prices_dex_subscription_includes_dex(self):
+        fake = FakeWsInfo()
+        original_get_ws_info = feed.get_ws_info
+        try:
+            feed.get_ws_info = lambda perp_dexs=None: fake
+            feed.prices(coins="GOLD", updates=1, dex="XYZ")
+        finally:
+            feed.get_ws_info = original_get_ws_info
+
+        self.assertEqual(fake.subscriptions, [{"type": "allMids", "dex": "xyz"}])
+        self.assertTrue(fake.disconnected)
+
+    def test_get_ws_info_starts_websocket_after_metadata_load(self):
+        events = []
+
+        class MetadataFirstInfo:
+            def __init__(self, base_url, skip_ws=False, perp_dexs=None):
+                events.append(("info", skip_ws, perp_dexs))
+                self.base_url = base_url
+                self.ws_manager = None
+
+        class StartedWsManager:
+            def __init__(self, base_url):
+                events.append(("ws_init", base_url))
+
+            def start(self):
+                events.append(("ws_start",))
+
+        original_info = client_module.Info
+        original_ws_manager = client_module.WebsocketManager
+        try:
+            client_module.Info = MetadataFirstInfo
+            client_module.WebsocketManager = StartedWsManager
+            info = client_module.get_ws_info(["xyz"])
+        finally:
+            client_module.Info = original_info
+            client_module.WebsocketManager = original_ws_manager
+
+        self.assertIsInstance(info.ws_manager, StartedWsManager)
+        self.assertEqual(events[0], ("info", True, ["xyz"]))
+        self.assertEqual(events[1][0], "ws_init")
+        self.assertEqual(events[2], ("ws_start",))
+
+    def test_wait_for_stream_disconnects_and_propagates_callback_error(self):
+        fake = FakeWsInfo()
+        controller = feed.StreamController(updates=None)
+        controller.fail(RuntimeError("callback failed"))
+
+        with self.assertRaisesRegex(RuntimeError, "callback failed"):
+            feed._wait_for_stream(fake, controller, seconds=1)
+
+        self.assertTrue(fake.disconnected)
+
+    def test_spot_market_dry_run_does_not_load_client(self):
+        original_get_client = spot.get_client
+        try:
+            spot.get_client = lambda: self.fail("dry-run should not create a client")
+            spot.market_buy("PURR/USDC", 100.0, dry_run=True)
+        finally:
+            spot.get_client = original_get_client
+
+    def test_spot_market_failed_response_exits(self):
+        fake = FakeClient()
+        fake.exchange.response = {"status": "err", "response": "bad"}
+        original_get_client = spot.get_client
+        try:
+            spot.get_client = lambda: fake
+            with self.assertRaises(typer.Exit):
+                spot.market_buy("PURR/USDC", 100.0, yes=True)
+        finally:
+            spot.get_client = original_get_client
+
+    def test_account_transfer_uses_canonical_decimal_string(self):
+        fake = FakeClient()
+        original_get_client = account.get_client
+        try:
+            account.get_client = lambda: fake
+            account.spot_to_perp("1.230000", yes=True)
+        finally:
+            account.get_client = original_get_client
+
+        args, kwargs = fake.exchange.usd_class_transfer_args
+        self.assertEqual(args, ("1.23",))
+        self.assertEqual(kwargs, {"to_perp": True})
+
+    def test_root_cancel_all_requires_bulk_cancel_success(self):
+        fake = FakeClient()
+        fake.exchange.response = {"status": "ok", "response": {"data": {"statuses": [{"error": "already canceled"}]}}}
+        original_get_client = main.get_client
+        try:
+            main.get_client = lambda: fake
+            with self.assertRaises(typer.Exit):
+                main.cancel_all(yes=True)
+        finally:
+            main.get_client = original_get_client
+
+        args, _ = fake.exchange.bulk_cancel_args
+        self.assertEqual(args, ([{"coin": "ETH", "oid": 123}],))
+
+    def test_perp_cancel_accepts_success_status(self):
+        fake = FakeClient()
+        fake.exchange.response = {"status": "ok", "response": {"data": {"statuses": ["success"]}}}
+        original_get_client = perp.get_client
+        try:
+            perp.get_client = lambda: fake
+            perp.cancel("ETH", 123)
+        finally:
+            perp.get_client = original_get_client
+
+        args, _ = fake.exchange.cancel_args
+        self.assertEqual(args, ("ETH", 123))
 
 
 if __name__ == "__main__":

@@ -145,6 +145,7 @@ hyper algo backtest grid_strategy.json --limit 200
 
 # Real-time feeds
 hyper feed prices --coins ETH,BTC
+hyper feed prices --coins GOLD --dex xyz
 hyper feed book GOLD --dex xyz --depth 5
 hyper feed trades GOLD --dex xyz
 hyper feed account --fills --orders
