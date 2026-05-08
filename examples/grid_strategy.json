@@ -1,0 +1,18 @@
+{
+  "strategy": "grid",
+  "coin": "ETH",
+  "market_type": "perp",
+  "interval": "1h",
+  "params": {
+    "lower_price": 2200,
+    "upper_price": 2600,
+    "levels": 5,
+    "order_size": 0.02
+  },
+  "backtest": {
+    "starting_cash": 10000,
+    "fee_rate": 0.00035,
+    "slippage_bps": 1,
+    "limit": 200
+  }
+}

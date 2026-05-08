@@ -1,0 +1,14 @@
+strategy: dca
+coin: ETH
+market_type: perp
+interval: 1h
+params:
+  side: buy
+  size: 0.05
+  interval_candles: 24
+  max_orders: 10
+backtest:
+  starting_cash: 10000
+  fee_rate: 0.00035
+  slippage_bps: 1
+  limit: 300

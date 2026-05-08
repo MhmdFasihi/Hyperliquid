@@ -10,9 +10,10 @@ from hyper_cli.display import (
     console,
     print_balances,
     print_open_orders,
-    print_order_response,
+    print_and_require_success,
     print_order_status,
 )
+from hyper_cli.validation import confirm_or_exit, parse_side, require_positive, require_slippage
 
 app = typer.Typer(help="Spot trading commands", no_args_is_help=True)
 
@@ -28,21 +29,30 @@ def _resolve_tif(tif: str) -> str:
 
 
 def _place_order(coin: str, is_buy: bool, sz: float, price: float, tif: str) -> None:
+    require_positive("size", sz)
+    require_positive("price", price)
     client = get_client()
     order_type = {"limit": {"tif": _resolve_tif(tif)}}
     try:
         result = client.exchange.order(coin, is_buy, sz, price, order_type)
-        print_order_response(result)
+        print_and_require_success(result)
     except Exception as e:
         console.print(f"[red]Order failed:[/red] {e}")
         raise typer.Exit(1)
 
 
-def _market_order(coin: str, is_buy: bool, sz: float, slippage: float) -> None:
+def _market_order(coin: str, is_buy: bool, sz: float, slippage: float, yes: bool, dry_run: bool) -> None:
+    require_positive("size", sz)
+    require_slippage("slippage", slippage)
+    side_label = "buy" if is_buy else "sell"
+    console.print(f"[yellow]Preview:[/yellow] spot market {side_label} {sz} {coin} with slippage {slippage}")
+    if dry_run:
+        return
+    confirm_or_exit(f"Place spot market {side_label} order for {sz} {coin}?", yes)
     client = get_client()
     try:
         result = client.exchange.market_open(coin, is_buy, sz, slippage=slippage)
-        print_order_response(result)
+        print_and_require_success(result)
     except Exception as e:
         console.print(f"[red]Market order failed:[/red] {e}")
         raise typer.Exit(1)
@@ -80,20 +90,30 @@ def sell(
 def market_buy(
     coin: Annotated[str, typer.Argument(help="Spot coin, e.g. PURR/USDC")],
     size: Annotated[float, typer.Argument(help="Order size")],
-    slippage: Annotated[float, typer.Option(help="Slippage tolerance (0.05 = 5%%)")] = 0.05,
+    slippage: Annotated[
+        float,
+        typer.Option(min=0.0, max=1.0, help="Slippage tolerance (0.05 = 5%)"),
+    ] = 0.05,
+    yes: Annotated[bool, typer.Option("--yes", "-y", help="Skip confirmation prompt")] = False,
+    dry_run: Annotated[bool, typer.Option("--dry-run", help="Print the action without signing or placing an order")] = False,
 ) -> None:
     """Place a spot market buy order."""
-    _market_order(coin, is_buy=True, sz=size, slippage=slippage)
+    _market_order(coin, is_buy=True, sz=size, slippage=slippage, yes=yes, dry_run=dry_run)
 
 
 @app.command("market-sell")
 def market_sell(
     coin: Annotated[str, typer.Argument(help="Spot coin, e.g. PURR/USDC")],
     size: Annotated[float, typer.Argument(help="Order size")],
-    slippage: Annotated[float, typer.Option(help="Slippage tolerance (0.05 = 5%%)")] = 0.05,
+    slippage: Annotated[
+        float,
+        typer.Option(min=0.0, max=1.0, help="Slippage tolerance (0.05 = 5%)"),
+    ] = 0.05,
+    yes: Annotated[bool, typer.Option("--yes", "-y", help="Skip confirmation prompt")] = False,
+    dry_run: Annotated[bool, typer.Option("--dry-run", help="Print the action without signing or placing an order")] = False,
 ) -> None:
     """Place a spot market sell order."""
-    _market_order(coin, is_buy=False, sz=size, slippage=slippage)
+    _market_order(coin, is_buy=False, sz=size, slippage=slippage, yes=yes, dry_run=dry_run)
 
 
 # ── Cancel ──────────────────────────────────────────────────
@@ -108,7 +128,7 @@ def cancel(
     client = get_client()
     try:
         result = client.exchange.cancel(coin, oid)
-        print_order_response(result)
+        print_and_require_success(result)
     except Exception as e:
         console.print(f"[red]Cancel failed:[/red] {e}")
         raise typer.Exit(1)
@@ -117,8 +137,10 @@ def cancel(
 @app.command("cancel-all")
 def cancel_all(
     coin: Annotated[str, typer.Argument(help="Cancel all orders for this coin")],
+    yes: Annotated[bool, typer.Option("--yes", "-y", help="Skip confirmation prompt")] = False,
 ) -> None:
     """Cancel all open orders for a coin."""
+    confirm_or_exit(f"Cancel all open spot orders for {coin}?", yes)
     client = get_client()
     try:
         open_orders = client.info.open_orders(client.address)
@@ -128,7 +150,7 @@ def cancel_all(
             return
         cancel_reqs = [{"coin": coin, "oid": o["oid"]} for o in matching]
         result = client.exchange.bulk_cancel(cancel_reqs)
-        print_order_response(result)
+        print_and_require_success(result)
     except Exception as e:
         console.print(f"[red]Cancel-all failed:[/red] {e}")
         raise typer.Exit(1)
@@ -145,14 +167,23 @@ def modify(
     size: Annotated[float, typer.Argument(help="New order size")],
     price: Annotated[float, typer.Argument(help="New limit price")],
     tif: Annotated[str, typer.Option(help="Time in force: gtc, ioc, alo")] = "gtc",
+    yes: Annotated[bool, typer.Option("--yes", "-y", help="Skip confirmation prompt")] = False,
+    dry_run: Annotated[bool, typer.Option("--dry-run", help="Print the replacement order without signing")] = False,
 ) -> None:
     """Modify an existing order."""
-    is_buy = side.lower() in ("buy", "b")
+    require_positive("size", size)
+    require_positive("price", price)
+    is_buy = parse_side(side, allow_position_aliases=False)
     client = get_client()
     order_type = {"limit": {"tif": _resolve_tif(tif)}}
+    side_label = "buy" if is_buy else "sell"
+    console.print(f"[yellow]Preview:[/yellow] modify OID {oid}: {side_label} {size} {coin} at {price}, tif={tif}")
+    if dry_run:
+        return
+    confirm_or_exit(f"Modify spot order {oid} on {coin}?", yes)
     try:
         result = client.exchange.modify_order(oid, coin, is_buy, size, price, order_type)
-        print_order_response(result)
+        print_and_require_success(result)
     except Exception as e:
         console.print(f"[red]Modify failed:[/red] {e}")
         raise typer.Exit(1)

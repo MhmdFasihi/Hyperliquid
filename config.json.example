@@ -1,4 +1,6 @@
 {
-    "secret_key": "0xYOUR_AGENT_PRIVATE_KEY",
-    "account_address": "0xYOUR_MAIN_WALLET_ADDRESS"
+    "agent_secret_key": "0xYOUR_AGENT_PRIVATE_KEY",
+    "account_address": "0xYOUR_MAIN_WALLET_ADDRESS",
+    "main_wallet_secret_key": "",
+    "network": "mainnet"
 }
